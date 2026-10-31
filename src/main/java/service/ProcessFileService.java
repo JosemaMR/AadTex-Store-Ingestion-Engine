@@ -20,9 +20,5 @@ public class ProcessFileService {
     // aqui es donde hago todas las cuentas e historias
 
 
-    public void taltaltal(){
-        File a = csvReader.read();
-        File b = txtReader.read();
-        mergeFileProcess();
-    }
+
 }
