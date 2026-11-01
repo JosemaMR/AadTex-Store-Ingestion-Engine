@@ -8,9 +8,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.file.Path;
+import java.security.GeneralSecurityException;
 import java.util.List;
 
 @Service
@@ -20,10 +25,12 @@ public class ProcessFileService {
 
     private final StoreFileRepository fileRepository;
     private final CsvReader csvReader;
+    private final CryptoService cryptoService;
 
-    public ProcessFileService(StoreFileRepository fileRepository, CsvReader csvReader) {
+    public ProcessFileService(StoreFileRepository fileRepository, CsvReader csvReader, CryptoService cryptoService) {
         this.fileRepository = fileRepository;
         this.csvReader = csvReader;
+        this.cryptoService = cryptoService;
     }
 
     // Lo llama el Scheduler cada 5 segundos
@@ -57,9 +64,9 @@ public class ProcessFileService {
         // 2) Si no, según su extensión
         switch (Utils.extensionOf(file)) {
             case "csv" -> processCsv(file);
-            case "enc" -> log.info("ENC detectado: {}", name);   // pendiente: descifrarlo
-            case "zip" -> log.info("ZIP detectado: {}", name);   // pendiente: descomprimirlo
-            case "jpg" -> log.info("JPG detectado: {}", name);   // pendiente: copiar la firma
+            case "enc" -> processEnc(file);
+            case "zip" -> processZip(file);
+            case "jpg" -> processSignature(file);
             default    -> log.warn("Tipo de fichero no soportado, se ignora: {}", name);
         }
     }
@@ -70,6 +77,54 @@ public class ProcessFileService {
         logSummary(file.getFileName().toString(), sales);
     }
 
+    // Descifra un .enc en memoria y lee el CSV que lleva dentro
+    private void processEnc(Path file) throws IOException {
+        String secret = fileRepository.readKey();
+        byte[] encrypted = fileRepository.readBytes(file);
+
+        try {
+            byte[] plain = cryptoService.decrypt(encrypted, secret);
+            List<Sale> sales = csvReader.readStream(new ByteArrayInputStream(plain));
+            logSummary(file.getFileName().toString(), sales);
+        } catch (GeneralSecurityException e) {
+            throw new IOException("No se pudo descifrar " + file.getFileName(), e);
+        }
+    }
+
+    // Abre un ZIP y recorre lo que lleva dentro, todo en memoria (sin ficheros temporales)
+    private void processZip(Path file) throws IOException {
+        String zipName = file.getFileName().toString();
+        int entries = 0;
+
+        try (ZipInputStream zip = fileRepository.openZip(file)) {
+            ZipEntry entry;
+            while ((entry = zip.getNextEntry()) != null) {
+                if (entry.isDirectory()) {
+                    continue;
+                }
+                entries++;
+                String entryName = entry.getName();
+
+                switch (Utils.extensionOf(entryName)) {
+                    case "csv" -> {
+                        List<Sale> sales = csvReader.readStream(zip);   // sin cerrar: lo cierra el try de arriba
+                        logSummary(zipName + " > " + entryName, sales);
+                    }
+                    case "jpg" -> {
+                        long bytes = fileRepository.copySignatureStream(zip, entryName);   // sin cerrar el zip
+                        log.info("Firma copiada desde {}: {} ({} bytes)", zipName, entryName, bytes);
+                    }   // pendiente: copiarla
+                    default    -> log.warn("Entrada no soportada dentro de {}: {}", zipName, entryName);
+                }
+            }
+        }
+
+        if (entries == 0) {
+            throw new IOException("El ZIP está vacío o dañado: " + zipName);
+        }
+    }
+
+
     // Aquí se hacen las cuentas: suma de todos los importes del lote
     private void logSummary(String batchName, List<Sale> sales) {
         BigDecimal total = BigDecimal.ZERO;
@@ -79,5 +134,11 @@ public class ProcessFileService {
 
         String store = sales.isEmpty() ? "-" : sales.get(0).storeName();
         log.info("Lote {}: {} ventas, total {} (tienda: {})", batchName, sales.size(), total, store);
+    }
+
+    // Copia una firma JPG a output/processed/signatures/
+    private void processSignature(Path file) throws IOException {
+        long bytes = fileRepository.copySignatureFile(file);
+        log.info("Firma copiada: {} ({} bytes)", file.getFileName(), bytes);
     }
 }
