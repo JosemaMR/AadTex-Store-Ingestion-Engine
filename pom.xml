@@ -11,15 +11,8 @@
 	<groupId>com.AadTex.Store.Ingestion.Engine</groupId>
 	<artifactId>AadTex-Store-Ingestion-Engine</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name/>
-	<description/>
-	<url/>
-	<licenses>
-		<license/>
-	</licenses>
-	<developers>
-		<developer/>
-	</developers>
+	<name>AadTex-Store-Ingestion-Engine</name>
+	<description>App 1: ingestión nocturna de ventas, firmas y balances de las tiendas AadTex (RA1)</description>
 	<scm>
 		<connection/>
 		<developerConnection/>
@@ -32,7 +25,7 @@
 	<dependencies>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-webmvc</artifactId>
+			<artifactId>spring-boot-starter</artifactId>
 		</dependency>
 
 		<dependency>
@@ -42,7 +35,7 @@
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-webmvc-test</artifactId>
+			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
