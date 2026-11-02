@@ -18,5 +18,5 @@ public class StorePaths {
     public Path processed()  { return base.resolve("output/processed"); }
     public Path signatures() { return base.resolve("output/processed/signatures"); }
     public Path error()      { return base.resolve("output/error"); }
-    public Path bucket()     { return base.resolve("output/bucket/aadtex-daily-reports/2026/09"); }
+    public Path bucket()     { return base.resolve("output/bucket/aadtex-daily-reports"); }
 }

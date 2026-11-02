@@ -46,9 +46,24 @@ public class StoreFileRepository {
         return Files.size(file) == 0;
     }
 
+    // true si la firma está en input/ o ya se copió a output/processed/signatures/
+    public boolean signatureExists(String signatureName) {
+        return Files.exists(paths.input().resolve(signatureName))
+                || Files.exists(paths.signatures().resolve(signatureName));
+    }
+
     // Mueve el fichero a output/error/ (si ya había uno con ese nombre, lo reemplaza)
     public void moveToError(Path file) throws IOException {
-        Files.move(file, paths.error().resolve(file.getFileName()), StandardCopyOption.REPLACE_EXISTING);
+        moveTo(file, paths.error());
+    }
+
+    // Mueve el fichero a output/processed/ (si ya había uno con ese nombre, lo reemplaza)
+    public void moveToProcessed(Path file) throws IOException {
+        moveTo(file, paths.processed());
+    }
+
+    private void moveTo(Path file, Path folder) throws IOException {
+        Files.move(file, folder.resolve(file.getFileName()), StandardCopyOption.REPLACE_EXISTING);
     }
     // Lee la clave AES de keys/AadTexSecret.key
     public String readKey() throws IOException {
@@ -67,6 +82,7 @@ public class StoreFileRepository {
     // Copia una firma JPG que está en input/ a output/processed/signatures/
     public long copySignatureFile(Path file) throws IOException {
         try (InputStream in = Files.newInputStream(file)) {
+
             return copySignatureStream(in, file.getFileName().toString());
         }
     }
@@ -76,6 +92,14 @@ public class StoreFileRepository {
     public long copySignatureStream(InputStream in, String fileName) throws IOException {
         Path target = paths.signatures().resolve(onlyName(fileName));
         BufferedInputStream bufferedIn = new BufferedInputStream(in);
+
+        // Un JPG empieza siempre por FF D8 FF. Se mira y se "rebobina" para no perder esos bytes.
+        bufferedIn.mark(3);
+        byte[] magic = bufferedIn.readNBytes(3);
+        if (magic.length < 3 || magic[0] != (byte) 0xFF || magic[1] != (byte) 0xD8 || magic[2] != (byte) 0xFF) {
+            throw new IOException("La firma no es un JPG válido: " + fileName);
+        }
+        bufferedIn.reset();
 
         long total = 0;
         try (BufferedOutputStream out = new BufferedOutputStream(Files.newOutputStream(target))) {
